@@ -100,11 +100,11 @@ BitIndices(::Type{C}) where C<:AbstractCliffordNumber = BitIndices{signature(C)}
     return BitIndex{Q}(UInt(i-1))
 end
 
-# Very efficient tuple generation
-@generated function _Tuple(::B) where B<:BitIndices
-    data = ntuple(i -> B()[i], Val(length(B)))
-    return :($data)
-end
+# Keep dispatch in the caller's world: this file is loaded before the concrete
+# Clifford-number types define their blade counts and index mappings. A generated
+# function would freeze those lookups too early on Julia 1.13. The type parameter
+# still lets inference specialize and unroll the fixed-size tuple.
+@inline _Tuple(b::B) where B<:BitIndices = ntuple(i -> b[i], Val(length(B)))
 
 # Avoid generating more methods if C contains extraneous parameters
 Base.Tuple(::BitIndices{Q,C}) where {Q,C} = _Tuple(BitIndices{Q,bitindices_type(C)}())
@@ -182,12 +182,11 @@ end
 An efficient method for indexing the elements of `x` into a tuple that can be used to construct a
 Clifford number of type `C`, or a similar type from `CliffordNumbers.similar_type`.
 """
-@generated function getindex_as_tuple(x::AbstractCliffordNumber{Q}, ::BitIndices{Q,C}) where {Q,C}
-    inds = to_index.(x, BitIndices(C))
-    # The mask is needed for the KVector case.
-    # BitIndex objects that don't map to a tuple index just get to turned to index 1
-    mask = in.(BitIndices(C), tuple(BitIndices(x)))
-    return :(map(*, getindex.(tuple(Tuple(x)), $inds), $mask))
+@inline function getindex_as_tuple(x::AbstractCliffordNumber{Q}, B::BitIndices{Q,C}) where {Q,C}
+    # Concrete representations implement missing grades as zero. Dispatching
+    # through their indexing methods also avoids freezing their later-defined
+    # blade mappings in this file's earlier generator world.
+    return map(b -> x[b], Tuple(B))
 end
 
 @inline function getindex(x::AbstractCliffordNumber{Q}, B::BitIndices{Q,C}) where {Q,C}

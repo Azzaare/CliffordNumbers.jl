@@ -159,3 +159,25 @@ end
     @test nblades(EvenCliffordNumber{STA}) === nblades(EvenCliffordNumber{STA,Int,8})
     @test nblades(zero(EvenCliffordNumber{STA})) === nblades(EvenCliffordNumber{STA,Int,8})
 end
+@testset "Basis tuples see concrete blade methods defined after BitIndices" begin
+    for Q in (VGA(2), VGA(3), PGA(2), STA)
+        for C in (CliffordNumber{Q}, EvenCliffordNumber{Q}, OddCliffordNumber{Q},
+                  KVector{0,Q}, KVector{1,Q}, KVector{2,Q})
+            indices = BitIndices(C)
+            values = @inferred Tuple(indices)
+            @test length(values) == nblades(C)
+            @test values == ntuple(i -> indices[i], length(indices))
+            @test all(i -> values[i] == indices[i], eachindex(values))
+        end
+    end
+    e1 = KVector{1,VGA(2),Float64}(1, 0)
+    e2 = KVector{1,VGA(2),Float64}(0, 1)
+    @test Tuple(@inferred(e1 * e2)) == (0.0, 1.0)
+    @test Tuple(@inferred(e2 * e1)) == (0.0, -1.0)
+    @test Tuple(@inferred(e1 * e1)) == (1.0, 0.0)
+    @test Tuple(@inferred CliffordNumber{VGA(2)}(e1)) == (0.0, 1.0, 0.0, 0.0)
+    @test Tuple(@inferred EvenCliffordNumber{VGA(2)}(e1 * e2)) == (0.0, 1.0)
+    rotor = exp(-(e1 * e2) * (pi / 4))
+    rotated = rotor * e1 * reverse(rotor)
+    @test all(i -> isapprox(Tuple(rotated)[i], (0.0, 1.0)[i]; atol=1e-14), 1:2)
+end
